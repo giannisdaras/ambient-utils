@@ -7,6 +7,8 @@ from .url import *
 from .eval import *
 # from .diffusers import *
 from .dataset import *
+from .search import *
+from .classifier import *
 
 # add also aliases, e.g. ambient_utils.diffusers_utils should be a thing. This ensures backward compatibility.
 # import ambient_utils.diffusers as diffusers_utils
@@ -17,3 +19,4 @@ import ambient_utils.eval as eval_utils
 import ambient_utils.geom as geom_utils
 import ambient_utils.dist as dist_utils
 import ambient_utils.loss as loss_utils
+import ambient_utils.classifier as classifier_utils

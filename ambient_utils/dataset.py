@@ -263,7 +263,7 @@ class ImageFolderDataset(Dataset):
         self._path = path
         self._use_pyspng = use_pyspng
         self._zipfile = None
-
+        self._resolution = resolution
         if os.path.isdir(self._path):
             self._type = 'dir'
             self._all_fnames = {os.path.relpath(os.path.join(root, fname), start=self._path) for root, _dirs, files in os.walk(self._path) for fname in files}
@@ -333,6 +333,8 @@ class ImageFolderDataset(Dataset):
             image = image[:, :, np.newaxis] # HW => HWC
         if self._file_ext(fname) != '.npy':
             image = image.transpose(2, 0, 1) # HWC => CHW
+        if self._resolution is not None:
+            image = F.interpolate(torch.from_numpy(image).unsqueeze(0), size=(self._resolution, self._resolution), mode='bilinear', align_corners=False).squeeze(0).numpy()
         return image
 
     def _load_raw_labels(self):

@@ -10,6 +10,8 @@ import math
 import os
 import s3fs
 from typing import Any
+import imageio
+import matplotlib.pyplot as plt
 
 def get_rel_methods(obj, keyword):
     """Returns all methods/properties of obj that contain keyword in their name.
@@ -71,6 +73,57 @@ def save_image(images, image_path, save_wandb=False, down_factor=None, wandb_dow
             # resize for speed
             pil_image = pil_image.resize((pil_image.size[0] // wandb_down_factor, pil_image.size[1] // wandb_down_factor))
         wandb.log({"images/" + image_path.split("/")[-1]: wandb.Image(pil_image)})
+
+
+def show_image(images, down_factor=None, caption=None, font_size=40, text_color=(255, 255, 255), image_type="RGB"):
+    """Display an image using matplotlib instead of saving to disk.
+    
+    Args:
+        images: tensor of shape (channels, height, width) or (batch_size, channels, height, width)
+        down_factor: factor to downscale the image by
+        caption: text caption to add to the image
+        font_size: size of the caption font
+        text_color: RGB tuple for caption color
+        image_type: PIL image type
+    
+    Returns:
+        matplotlib figure object
+    """
+    # Handle batch dimension
+    if images.ndim == 4:
+        images = images[0]  # Take first image from batch
+    
+    image_np = (images * 127.5 + 128).clip(0, 255).to(torch.uint8).permute(1, 2, 0).cpu().numpy()
+    
+    if image_np.shape[2] == 1:
+        pil_image = PIL.Image.fromarray(image_np[:, :, 0], 'L')
+    else:
+        pil_image = PIL.Image.fromarray(image_np, image_type)
+    
+    if down_factor is not None:
+        pil_image = pil_image.resize((pil_image.size[0] // down_factor, pil_image.size[1] // down_factor))
+    
+    if caption is not None:
+        draw = PIL.ImageDraw.Draw(pil_image)
+        # use LaTeX bold font
+        font = PIL.ImageFont.truetype("cmr10.ttf", font_size)
+        # make bold
+        draw.text((0, 0), caption, text_color, font=font)
+    
+    # Convert PIL image to numpy array for matplotlib
+    image_np = np.array(pil_image)
+    
+    # Create matplotlib figure
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    if image_np.ndim == 3 and image_np.shape[2] == 3:
+        ax.imshow(image_np)
+    else:
+        ax.imshow(image_np, cmap='gray')
+    
+    ax.axis('off')
+    plt.tight_layout()
+    
+    return fig
 
 
 def find_closest_factors(number):
@@ -140,6 +193,73 @@ def save_images(images, image_path, num_rows=None, num_cols=None, save_wandb=Fal
         wandb.log({"images/" + image_path.split("/")[-1]: wandb.Image(grid_image)})
 
 
+def show_images(images, num_rows=None, num_cols=None, down_factor=None, captions=None, font_size=40, text_color=(255, 255, 255), 
+                draw_horizontal_arrow=False, draw_vertical_arrow=False):
+    """Display a grid of images using matplotlib instead of saving to disk.
+    
+    Args:
+        images: tensor of shape (batch_size, channels, height, width)
+        num_rows: number of rows in the grid (auto-calculated if None)
+        num_cols: number of columns in the grid (auto-calculated if None)
+        down_factor: factor to downscale the images by
+        captions: list of captions for each image
+        font_size: size of the caption font
+        text_color: RGB tuple for caption color
+        draw_horizontal_arrow: whether to draw a horizontal red arrow at the top
+        draw_vertical_arrow: whether to draw a vertical red arrow on the left
+    
+    Returns:
+        matplotlib figure object
+    """
+    if num_rows is None and num_cols is None:
+        num_rows = int(np.sqrt(images.shape[0]))    
+        num_cols = int(np.ceil(images.shape[0] / num_rows))
+    elif num_rows is None and num_cols is not None:
+        num_rows = int(np.ceil(images.shape[0] / num_cols))
+    elif num_rows is not None and num_cols is None:
+        num_cols = int(np.ceil(images.shape[0] / num_rows))
+    
+    if num_rows * num_cols != images.shape[0]:
+        num_rows, num_cols = find_closest_factors(images.shape[0])
+    
+    image_np = (images * 127.5 + 128).clip(0, 255).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
+    image_size = images.shape[-2]
+    grid_image = PIL.Image.new('RGB', (num_cols * image_size, num_rows * image_size))
+    
+    for i in range(num_rows):
+        for j in range(num_cols):
+            index = i * num_cols + j
+            img = PIL.Image.fromarray(image_np[index])
+            grid_image.paste(img, (j * image_size, i * image_size))
+            if captions is not None:
+                draw = PIL.ImageDraw.Draw(grid_image)
+                # use LaTeX bold font
+                font = PIL.ImageFont.truetype("cmr10.ttf", font_size)
+                draw.text((j * image_size, i * image_size), captions[index], text_color, font=font)
+    
+    if down_factor is not None:
+        grid_image = grid_image.resize((grid_image.size[0] // down_factor, grid_image.size[1] // down_factor))
+    
+    if draw_horizontal_arrow:
+        draw = PIL.ImageDraw.Draw(grid_image)
+        # draw it on the top of the image
+        draw.line((0, 0, grid_image.size[0], 0), fill=(255, 0, 0), width=5)
+
+    if draw_vertical_arrow:
+        draw = PIL.ImageDraw.Draw(grid_image)
+        # draw it on the left of the image
+        draw.line((0, 0, 0, grid_image.size[1]), fill=(255, 0, 0), width=5)
+
+    # Convert PIL image to numpy array for matplotlib
+    grid_np = np.array(grid_image)
+    
+    # Create matplotlib figure
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    ax.imshow(grid_np)
+    ax.axis('off')
+    plt.tight_layout()
+    
+    return fig
 
 
 def tile_image(batch_image, n, m=None):

@@ -23,10 +23,14 @@ def init():
         os.environ['WORLD_SIZE'] = '1'
 
     backend = 'gloo' if (os.name == 'nt' or (not torch.cuda.is_available())) else 'nccl'
+    # backend = "gloo"  # TODO: remove this
     torch.distributed.init_process_group(backend=backend, init_method='env://')
     if torch.cuda.is_available():
-        torch.cuda.set_device(int(os.environ.get('LOCAL_RANK', '0')))
-
+        local_rank = int(os.environ.get('LOCAL_RANK', '0'))
+        if torch.cuda.device_count() == 1:
+            torch.cuda.set_device(0)
+        else:
+            torch.cuda.set_device(local_rank)
 #----------------------------------------------------------------------------
 
 def get_rank():
